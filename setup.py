@@ -6,7 +6,7 @@ setup(
     version="1.0",
     author="zhanyh",
     author_email="zhanyh123@foxmail.com",
-    description=(""),
+    description="",
     license="MIT",
     keywords="",
     url="",
