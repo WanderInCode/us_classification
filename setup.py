@@ -10,15 +10,7 @@ setup(
     license="MIT",
     keywords="",
     url="",
-    packages=find_packages(),  # 需要打包的目录列表
-
-    # 需要安装的依赖
-    install_requires=[
-        'keras>=2.1.5',
-        'tenforflow>=1.6.0',
-        'numpy>=1.14.2',
-        'cv2>=3.4.0'
-    ],
+    py_modules=['ResCls'],  # 需要打包的目录列表
 
     zip_safe=False
 )
