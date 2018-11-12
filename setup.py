@@ -10,7 +10,7 @@ setup(
     license="MIT",
     keywords="",
     url="",
-    py_modules=['ResCls'],  # 需要打包的目录列表
+    py_modules=['ResCls'],
 
     zip_safe=False
 )
