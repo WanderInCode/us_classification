@@ -10,7 +10,6 @@ setup(
     license="MIT",
     keywords="",
     url="",
-    py_modules=['ResCls'],
-
+    packages=find_packages(exclude=('test',)),
     zip_safe=False
 )
