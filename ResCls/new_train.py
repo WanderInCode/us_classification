@@ -1,7 +1,4 @@
 from keras import backend as K
-from unet import get_u_net, get_new_u_net, get_unet
-from new_u_net import res_unet
-from data_loader import sample_split, BatchGenerator
 from augment import Augmentor, img_augment
 from keras.models import Model, model_from_json
 from keras.optimizers import Adam, SGD
@@ -9,36 +6,9 @@ from keras.callbacks import ModelCheckpoint, TensorBoard, LearningRateScheduler
 import numpy as np
 import os
 import platform
-from keras.losses import binary_crossentropy
+from keras.losses import categorical_crossentropy
 
 import tensorflow as tf
-
-smooth = 1.
-if 'Windows' in platform.platform():
-    path = os.path.abspath('.') + '\\train\\'
-else:
-    path = os.path.abspath('.') + '/small/train/'
-
-
-def bce_and_dice_loss(y_true, y_pred):
-    return binary_crossentropy(y_true, y_pred) - K.log(dice_coef(y_true, y_pred))
-
-
-def dice_coef(y_true, y_pred):
-    y_true_f = K.flatten(y_true)
-    y_pred_f = K.flatten(y_pred)
-    intersection = K.sum(y_true_f * y_pred_f)
-    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
-
-
-def dice_coef_loss(y_true, y_pred):
-    return -dice_coef(y_true, y_pred)
-
-
-def lr_scheduler(epoch, lr):
-
-    print('current lr:' + str(lr))
-    return lr
 
 
 def train(epoch, lr):
@@ -114,7 +84,7 @@ def train_classifier(epoch, lr, model, weight):
     last_layer = res_net.layers['act5c_branch2b']
 
     res_net.compile(optimizer=Adam(lr=lr),
-                  loss='binary_crossentropy')
+                    loss='categorical_crossentropy')
     train, validate = sample_split(path)
     a = Augmentor((320, 224), 10, (0.8, 1.2), crop=None)
     vals = img_augment(validate[0], validate[1], (320, 224),
@@ -128,27 +98,7 @@ def train_classifier(epoch, lr, model, weight):
     callbacks = [model_checkpoint]
 
     res_net.fit_generator(t, epochs=epoch, verbose=1, callbacks=callbacks,
-                        validation_data=vals)
-
-
-def set_network(layers):
-    layers['block1_conv1'].trainable = False
-    layers['block1_conv2'].trainable = False
-    layers['block1_pool'].trainable = False
-
-    layers['block2_conv1'].trainable = False
-    layers['block2_conv2'].trainable = False
-    layers['block2_pool'].trainable = False
-
-    layers['block3_conv1'].trainable = False
-    layers['block3_conv2'].trainable = False
-    layers['block3_conv3'].trainable = False
-    layers['block3_pool'].trainable = False
-
-    layers['block4_conv1'].trainable = False
-    layers['block4_conv2'].trainable = False
-    layers['block4_conv3'].trainable = False
-    layers['block4_pool'].trainable = False
+                          validation_data=vals)
 
 
 if __name__ == '__main__':
