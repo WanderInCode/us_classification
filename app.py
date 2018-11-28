@@ -2,7 +2,7 @@ from keras_preprocessing.image import transform_matrix_offset_center, flip_axis
 from keras.layers import Input, Convolution2D, MaxPooling2D, \
     BatchNormalization, Activation, GlobalAveragePooling2D, Dense
 from keras.optimizers import Adam, SGD
-from keras.callbacks import ModelCheckpoint, TensorBoard
+from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping
 from keras.models import Model
 from keras import backend as K
 from keras import layers
@@ -342,9 +342,11 @@ def grad_cam(model, images, layer_name):
     return weight_maps
 
 
-def train_classifier(classes, path, epoch, lr):
+def train_classifier(classes, path, epoch, lr, weights_path=None):
     model = res34(classes)
-    model.compile(optimizer=Adam(lr=lr),
+    if weights_path:
+        model.load_weights(weights_path)
+    model.compile(optimizer=SGD(lr=float(lr)),
                   loss='categorical_crossentropy', metrics=['accuracy'])
     train, validate = sample_split(path)
     a = Augmentor((320, 224), 10, (0.8, 1.2), crop=None)
@@ -353,17 +355,20 @@ def train_classifier(classes, path, epoch, lr):
                        10, (0.8, 1.2), True, False, None, 0, False)
 
     p = os.path.abspath('.')
-
-    model_checkpoint = ModelCheckpoint(
-        os.path.join(p, 'lr_00001_weights_{epoch:02d}_{val_acc:.2f}.hdf5'),
+    weights_name = 'lr_0' + lr[2:] + '_weights_{epoch:02d}_{val_acc:.2f}.hdf5'
+    checkpoint = ModelCheckpoint(
+        os.path.join(p, weights_name),
         monitor='val_acc', save_best_only=True)
-    callbacks = [model_checkpoint]
+    reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.5,
+                                  patience=20, min_lr=1e-8)
+    stop = EarlyStopping(monitor='val_acc', patience=20)
+    callbacks = [checkpoint, reduce_lr, stop]
 
     model.fit_generator(t, epochs=epoch, verbose=1, callbacks=callbacks,
                         validation_data=vals)
 
 
-def main():
+def main(classes, epoch, lr, weights_path=None):
     train_files_path = '/kaggle/input/filename/train_pic.txt'
     train_pic_names = []
     train_mask_names = []
@@ -375,7 +380,8 @@ def main():
             train_pic_names.append(train_pic_prefix + line.strip())
             mask_pic_name = line.strip().split('.')[0] + '_mask.tif'
             train_mask_names.append(train_pic_prefix + mask_pic_name)
-    train_classifier(2, [train_pic_names, train_mask_names], 100, 0.0001)
+    train_classifier(
+        classes, [train_pic_names, train_mask_names], epoch, lr, weights_path)
 
 
 def test():
@@ -394,4 +400,4 @@ def test():
     print(validate)
 
 
-main()
+main(2, 100, '0.000001', '/kaggle/input/kernel9ff08d037c/lr_0000001_weights_01_0.87.hdf5')
