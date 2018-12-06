@@ -1,6 +1,7 @@
 import numpy as np
 from keras.layers import Input, Convolution2D, MaxPooling2D, \
-    BatchNormalization, Activation, GlobalAveragePooling2D, Dense
+    BatchNormalization, Activation, GlobalAveragePooling2D, Dense, \
+    AveragePooling2D, Flatten
 from keras.models import Model
 from keras import backend as K
 from keras import layers
@@ -92,6 +93,47 @@ def res34(classes, input_shape=(224, 320, 1)):
     x = conv_block(x, 3, [512, 512], stage=5, block='a')
     x = identity_block(x, 3, [512, 512], stage=5, block='b')
     x = identity_block(x, 3, [512, 512], stage=5, block='c')
+
+    # x = AveragePooling2D((7, 7), name='avg_pool')(x)
+    # x = Flatten()(x)
+    # # cam weight
+    # x = Dense(classes, activation='softmax')(x)
+    # m = Model(img, x)
+    x = GlobalAveragePooling2D()(x)
+    # do not need Flatten layer!
+    # x = Flatten()(x)
+    # cam weight
+    x = Dense(classes, activation='softmax')(x)
+    m = Model(img, x)
+
+    return m
+
+
+def res18(classes, input_shape=(224, 320, 1)):
+    if K.image_data_format() == 'channels_last':
+        bn_axis = 3
+    else:
+        bn_axis = 1
+
+    img = Input(shape=input_shape)
+    x = Convolution2D(64, (7, 7), strides=(2, 2),
+                      padding='same', name='conv1')(img)
+    x = BatchNormalization(axis=bn_axis, name='bn_conv1')(x)
+    x = Activation('relu')(x)
+    # print(encoder1.shape)
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
+    # print(x.shape)
+    x = conv_block(x, 3, [64, 64], stage=2, block='a', strides=(1, 1))
+    x = identity_block(x, 3, [64, 64], stage=2, block='b')
+
+    x = conv_block(x, 3, [128, 128], stage=3, block='a')
+    x = identity_block(x, 3, [128, 128], stage=3, block='b')
+
+    x = conv_block(x, 3, [256, 256], stage=4, block='a')
+    x = identity_block(x, 3, [256, 256], stage=4, block='b')
+
+    x = conv_block(x, 3, [512, 512], stage=5, block='a')
+    x = identity_block(x, 3, [512, 512], stage=5, block='b')
 
     x = GlobalAveragePooling2D()(x)
     # do not need Flatten layer!

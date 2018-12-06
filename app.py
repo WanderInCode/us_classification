@@ -1,6 +1,7 @@
 from keras_preprocessing.image import transform_matrix_offset_center, flip_axis
 from keras.layers import Input, Convolution2D, MaxPooling2D, \
-    BatchNormalization, Activation, GlobalAveragePooling2D, Dense
+    BatchNormalization, Activation, GlobalAveragePooling2D, Dense, \
+    AveragePooling2D, Flatten
 from keras.optimizers import Adam, SGD
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping
 from keras.models import Model
@@ -318,9 +319,8 @@ def res34(classes, input_shape=(224, 320, 1)):
     x = identity_block(x, 3, [512, 512], stage=5, block='b')
     x = identity_block(x, 3, [512, 512], stage=5, block='c')
 
-    x = GlobalAveragePooling2D()(x)
-    # do not need Flatten layer!
-    # x = Flatten()(x)
+    x = AveragePooling2D((7, 7), name='avg_pool')(x)
+    x = Flatten()(x)
     # cam weight
     x = Dense(classes, activation='softmax')(x)
     m = Model(img, x)

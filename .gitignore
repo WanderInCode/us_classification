@@ -1,3 +1,8 @@
 .vscode
 test.py
 __pycache__
+train/
+lr_0000001_weights_03_0.87.hdf5
+lr_0000001_weights_02_0.85.hdf5
+lr_0000001_weights_07_0.85.hdf5
+*.csv
