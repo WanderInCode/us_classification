@@ -1,8 +1,8 @@
 from keras_preprocessing.image import ImageDataGenerator
 from keras.layers import Input, Convolution2D, MaxPooling2D, \
-    BatchNormalization, Activation, GlobalAveragePooling2D, Dense
+    BatchNormalization, Activation, GlobalAveragePooling2D, Dense, Dropout
 from keras.optimizers import Adam, SGD
-from keras.callbacks import ModelCheckpoint, TensorBoard
+from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras.models import Model
 from keras import backend as K
 from keras import layers
@@ -11,6 +11,7 @@ import numpy as np
 import cv2
 import scipy.ndimage as ndi
 import os
+import json
 
 
 def identity_block(input_tensor, kernel_size, filters, stage, block):
@@ -103,7 +104,45 @@ def res34(classes, input_shape=(224, 320, 1)):
     # do not need Flatten layer!
     # x = Flatten()(x)
     # cam weight
+    # x = Dropout(0.5)(x)
     x = Dense(classes, activation='softmax')(x)
+    m = Model(img, x)
+
+    return m
+
+
+def res18(classes, input_shape=(224, 320, 1)):
+    if K.image_data_format() == 'channels_last':
+        bn_axis = 3
+    else:
+        bn_axis = 1
+
+    img = Input(shape=input_shape)
+    x = Convolution2D(64, (7, 7), strides=(2, 2),
+                      padding='same', name='conv1')(img)
+    x = BatchNormalization(axis=bn_axis, name='bn_conv1')(x)
+    x = Activation('relu')(x)
+    # print(encoder1.shape)
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
+    # print(x.shape)
+    x = conv_block(x, 3, [64, 64], stage=2, block='a', strides=(1, 1))
+    x = identity_block(x, 3, [64, 64], stage=2, block='b')
+
+    x = conv_block(x, 3, [128, 128], stage=3, block='a')
+    x = identity_block(x, 3, [128, 128], stage=3, block='b')
+
+    x = conv_block(x, 3, [256, 256], stage=4, block='a')
+    x = identity_block(x, 3, [256, 256], stage=4, block='b')
+
+    x = conv_block(x, 3, [512, 512], stage=5, block='a')
+    x = identity_block(x, 3, [512, 512], stage=5, block='b')
+
+    x = GlobalAveragePooling2D()(x)
+    # do not need Flatten layer!
+    # x = Flatten()(x)
+    # cam weight
+    x = Dropout(0.5)(x)
+    x = Dense(classes, activation='sigmoid')(x)
     m = Model(img, x)
 
     return m
@@ -127,7 +166,7 @@ train_files_path = '/kaggle/input/filename/train_pic.txt'
 train_pic_prefix = '/kaggle/input/ultrasound-nerve-segmentation/train/'
 
 
-def img_reader():
+def img_reader(new_size=(320, 224)):
     trains = []
     labels = []
     with open(train_files_path, 'r') as f:
@@ -138,24 +177,27 @@ def img_reader():
             mask_path = train_pic_prefix + \
                 line.strip().split('.')[0] + '_mask.tif'
             pic = cv2.imread(pic_path, 0)[1:, 1:]
+            pic = cv2.resize(pic, new_size, interpolation=cv2.INTER_AREA)
             pic = pic[..., np.newaxis]
             trains.append(pic)
             mask = cv2.imread(mask_path, 0)
             mask = mask / 255.0
             if np.sum(mask) > 100:
-                labels.append([1, 0])
+                # labels.append([1, 0])
+                labels.append([1])
             else:
-                labels.append([0, 1])
+                # labels.append([0, 1])
+                labels.append([0])
     trains = np.array(trains)
     return trains, labels
 
 
 def train_classifier(classes, path, epoch, lr, weights_path=None):
-    model = res34(classes)
+    model = res18(classes)
     if weights_path:
         model.load_weights(weights_path)
     model.compile(optimizer=Adam(lr=float(lr)),
-                  loss='categorical_crossentropy', metrics=['accuracy'])
+                  loss='binary_crossentropy', metrics=['accuracy'])
     trains, labels = img_reader()
     generator = ImageDataGenerator(
         featurewise_center=True,
@@ -174,26 +216,36 @@ def train_classifier(classes, path, epoch, lr, weights_path=None):
     validate_flow = generator.flow(
         trains, labels, shuffle=True, subset='validation')
 
+    STEP_SIZE_TRAIN = train_flow.n//train_flow.batch_size
+    STEP_SIZE_VALID = validate_flow.n//validate_flow.batch_size
+
     p = os.path.abspath('.')
     weights_name = 'lr_0' + lr[2:] + '_weights_{epoch:02d}_{val_acc:.2f}.hdf5'
     model_checkpoint = ModelCheckpoint(
         os.path.join(p, weights_name),
         monitor='val_acc', save_best_only=True)
-    callbacks = [model_checkpoint]
 
-    model.fit_generator(train_flow, epochs=epoch, verbose=1, callbacks=callbacks,
-                        validation_data=validate_flow)
+    reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.1, patience=10)
+    callbacks = [model_checkpoint, reduce_lr]
+
+    history = model.fit_generator(train_flow,
+                                  epochs=epoch,
+                                  steps_per_epoch=STEP_SIZE_TRAIN,
+                                  verbose=1,
+                                  callbacks=callbacks,
+                                  validation_data=validate_flow,
+                                  validation_steps=STEP_SIZE_VALID)
+    with open('history.json', 'w') as f:
+        json.dump(history.history, f)
 
 
 def main(classes, epoch, lr, weights_path=None):
-    train_files_path = '/kaggle/input/filename/train_pic.txt'
     train_pic_names = []
     train_mask_names = []
     with open(train_files_path, 'r') as f:
         for line in f:
             if line.strip() == '':
                 continue
-            train_pic_prefix = '/kaggle/input/ultrasound-nerve-segmentation/train/'
             train_pic_names.append(train_pic_prefix + line.strip())
             mask_pic_name = line.strip().split('.')[0] + '_mask.tif'
             train_mask_names.append(train_pic_prefix + mask_pic_name)
@@ -217,4 +269,4 @@ def test():
     print(validate)
 
 
-main(2, 10, '0.00001', '/kaggle/input/kernelc280b66f71/lr_00001_weights_13_0.78.hdf5')
+main(2, 100, '0.0001')
